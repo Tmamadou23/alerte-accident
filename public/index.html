@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Alerte Accident</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">⚠</span>
+    <h1 data-i18n="app_title">Alerte Accident</h1>
+  </div>
+  <div class="actions">
+    <button id="btn-report" class="primary" data-i18n="report_btn">Signaler</button>
+    <button id="btn-stats" data-i18n="stats_btn">Statistiques</button>
+    <button id="btn-notif" title="Notifications">🔔</button>
+    <select id="lang">
+      <option value="fr">FR</option>
+      <option value="en">EN</option>
+    </select>
+  </div>
+</header>
+
+<aside class="filters">
+  <h3 data-i18n="filters">Filtres</h3>
+  <label><input type="checkbox" class="f-sev" value="grave" checked/> <span data-i18n="grave">Grave</span></label>
+  <label><input type="checkbox" class="f-sev" value="less_grave" checked/> <span data-i18n="less_grave">Moins grave</span></label>
+  <hr/>
+  <label><input type="checkbox" class="f-v" value="voiture" checked/> <span data-i18n="v_car">Voiture</span></label>
+  <label><input type="checkbox" class="f-v" value="moto" checked/> <span data-i18n="v_moto">Moto</span></label>
+  <label><input type="checkbox" class="f-v" value="camion" checked/> <span data-i18n="v_truck">Camion</span></label>
+  <label><input type="checkbox" class="f-v" value="velo" checked/> <span data-i18n="v_bike">Vélo</span></label>
+  <label><input type="checkbox" class="f-v" value="pieton" checked/> <span data-i18n="v_ped">Piéton</span></label>
+  <label><input type="checkbox" class="f-v" value="bus" checked/> <span data-i18n="v_bus">Bus</span></label>
+  <label><input type="checkbox" class="f-v" value="autre" checked/> <span data-i18n="v_other">Autre</span></label>
+</aside>
+
+<main id="map"></main>
+
+<!-- Report modal -->
+<div id="modal-report" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 data-i18n="report_title">Signaler un accident</h2>
+      <button class="close" data-close>&times;</button>
+    </div>
+    <form id="form-report">
+      <div class="row">
+        <label data-i18n="reporter_name">Nom et prénom de l'auteur du signalement</label>
+        <input name="reporter_name" required />
+      </div>
+      <div class="row">
+        <label data-i18n="reporter_contact">Contact</label>
+        <input name="reporter_contact" required />
+      </div>
+      <div class="row">
+        <label data-i18n="place_name">Nom du lieu</label>
+        <input name="place_name" placeholder="Ex: Carrefour X" />
+      </div>
+      <div class="row two">
+        <div>
+          <label data-i18n="lat">Latitude</label>
+          <input name="lat" id="in-lat" required />
+        </div>
+        <div>
+          <label data-i18n="lng">Longitude</label>
+          <input name="lng" id="in-lng" required />
+        </div>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-geo" data-i18n="use_geo">📍 Utiliser ma position</button>
+        <small data-i18n="geo_hint">ou cliquez sur la carte pour choisir</small>
+      </div>
+      <div class="row">
+        <label data-i18n="vehicles">Engins impliqués</label>
+        <div class="chips">
+          <label><input type="checkbox" name="vehicles" value="voiture"/> <span data-i18n="v_car">Voiture</span></label>
+          <label><input type="checkbox" name="vehicles" value="moto"/> <span data-i18n="v_moto">Moto</span></label>
+          <label><input type="checkbox" name="vehicles" value="camion"/> <span data-i18n="v_truck">Camion</span></label>
+          <label><input type="checkbox" name="vehicles" value="velo"/> <span data-i18n="v_bike">Vélo</span></label>
+          <label><input type="checkbox" name="vehicles" value="pieton"/> <span data-i18n="v_ped">Piéton</span></label>
+          <label><input type="checkbox" name="vehicles" value="bus"/> <span data-i18n="v_bus">Bus</span></label>
+          <label><input type="checkbox" name="vehicles" value="autre"/> <span data-i18n="v_other">Autre</span></label>
+        </div>
+      </div>
+      <div class="row">
+        <label data-i18n="severity">Niveau</label>
+        <div class="chips">
+          <label><input type="radio" name="severity" value="grave" required/> <span data-i18n="grave">Grave</span></label>
+          <label><input type="radio" name="severity" value="less_grave"/> <span data-i18n="less_grave">Moins grave</span></label>
+        </div>
+      </div>
+      <div class="row two">
+        <div>
+          <label data-i18n="deaths">Morts</label>
+          <input type="number" name="deaths" min="0" value="0" />
+        </div>
+        <div>
+          <label data-i18n="injured">Blessés</label>
+          <input type="number" name="injured" min="0" value="0" />
+        </div>
+      </div>
+      <div class="row">
+        <label data-i18n="description">Description</label>
+        <textarea name="description" rows="3"></textarea>
+      </div>
+      <div class="row">
+        <label data-i18n="photo">Photo</label>
+        <input type="file" id="in-photo" accept="image/*" capture="environment" />
+        <img id="preview" alt="" />
+      </div>
+      <div class="row actions-row">
+        <button type="button" data-close data-i18n="cancel">Annuler</button>
+        <button type="submit" class="primary" data-i18n="submit">Envoyer l'alerte</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Stats modal -->
+<div id="modal-stats" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 data-i18n="stats_title">Statistiques</h2>
+      <button class="close" data-close>&times;</button>
+    </div>
+    <div id="stats-body" class="stats-grid"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
