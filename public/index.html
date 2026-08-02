@@ -8,6 +8,10 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 <link rel="stylesheet" href="styles.css" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#dc2626" />
+<link rel="icon" href="/icon-192.png" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
 </head>
 <body>
 <header class="topbar">
@@ -18,7 +22,9 @@
   <div class="actions">
     <button id="btn-report" class="primary" data-i18n="report_btn">Signaler</button>
     <button id="btn-stats" data-i18n="stats_btn">Statistiques</button>
+    <button id="btn-export" data-i18n="export_btn">Exporter</button>
     <button id="btn-notif" title="Notifications">🔔</button>
+    <button id="btn-install" class="hidden" title="Installer" data-i18n="install_btn">Installer</button>
     <select id="lang">
       <option value="fr">FR</option>
       <option value="en">EN</option>
@@ -51,11 +57,11 @@
     </div>
     <form id="form-report">
       <div class="row">
-        <label data-i18n="reporter_name">Nom et prénom de l'auteur du signalement</label>
+        <label data-i18n="reporter_name">Nom et prénom</label>
         <input name="reporter_name" required />
       </div>
       <div class="row">
-        <label data-i18n="reporter_contact">Contact</label>
+        <label data-i18n="reporter_contact">Contact (tél / email)</label>
         <input name="reporter_contact" required />
       </div>
       <div class="row">
@@ -119,6 +125,30 @@
         <button type="submit" class="primary" data-i18n="submit">Envoyer l'alerte</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Export modal -->
+<div id="modal-export" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 data-i18n="export_title">Exporter les données</h2>
+      <button class="close" data-close>&times;</button>
+    </div>
+    <div style="padding:20px;">
+      <p style="color:#64748b;font-size:14px;margin-top:0" data-i18n="export_hint">Téléchargez toutes les données de signalements dans le format de votre choix.</p>
+      <div class="export-grid">
+        <a class="export-card" href="/api/export/csv" download>
+          <div class="ico">📊</div><div class="lbl">CSV</div><div class="sub" data-i18n="export_csv_sub">Tableur (Excel)</div>
+        </a>
+        <a class="export-card" href="/api/export/json" download>
+          <div class="ico">🧾</div><div class="lbl">JSON</div><div class="sub" data-i18n="export_json_sub">Données brutes</div>
+        </a>
+        <a class="export-card" href="/api/export/pdf" download>
+          <div class="ico">📄</div><div class="lbl">PDF</div><div class="sub" data-i18n="export_pdf_sub">Rapport formaté</div>
+        </a>
+      </div>
+    </div>
   </div>
 </div>
 

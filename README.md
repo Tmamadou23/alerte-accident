@@ -77,6 +77,27 @@ alerte-accident/
 └── README.md
 ```
 
+## Développement local
+
+Créez un fichier `.env` à la racine (copiez `.env.example`) avec :
+
+```
+DATABASE_URL=postgresql://postgres:210255@localhost:5432/bd_alerte
+VAPID_PUBLIC=BABTWydace1Nn8ENz-F9oqylWKJhw9jRsGHhvle4q6O5N276ZZyXdEJT26iblS9C-AKuYaW35VUI7aD1iMcDcLs
+VAPID_PRIVATE=z79h0w8fNG_vfIOtn4UkCNNwHuoLICuI8AnNCMN72MM
+```
+
+Puis :
+```bash
+npm install
+node --env-file=.env server.js
+```
+
 ## Publication en ligne
 
-Pour héberger l'application sur Internet, vous aurez besoin d'une base PostgreSQL accessible publiquement (Neon, Supabase, Railway, Aiven proposent des offres gratuites). Il suffit alors de définir la variable d'environnement `DATABASE_URL` avec la nouvelle chaîne de connexion.
+Voir **DEPLOY.md** pour le guide complet Render + is-a.dev.
+
+Variables d'environnement requises côté hébergeur :
+- `DATABASE_URL` — chaîne PostgreSQL (Neon recommandé)
+- `VAPID_PUBLIC` / `VAPID_PRIVATE` — clés Web Push (générer avec `npx web-push generate-vapid-keys`)
+- `VAPID_EMAIL` — email de contact (format `mailto:...`)

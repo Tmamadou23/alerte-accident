@@ -5,8 +5,8 @@ const I18N = {
     filters: "Filtres", grave: "Grave", less_grave: "Moins grave",
     v_car: "Voiture", v_moto: "Moto", v_truck: "Camion", v_bike: "Vélo",
     v_ped: "Piéton", v_bus: "Bus", v_other: "Autre",
-    report_title: "Signaler un accident", reporter_name: "Nom et prénom de l'auteur du signalement",
-    reporter_contact: "Contact", place_name: "Nom du lieu",
+    report_title: "Signaler un accident", reporter_name: "Nom et prénom",
+    reporter_contact: "Contact (tél / email)", place_name: "Nom du lieu",
     lat: "Latitude", lng: "Longitude", use_geo: "📍 Utiliser ma position",
     geo_hint: "ou cliquez sur la carte pour choisir",
     vehicles: "Engins impliqués", severity: "Niveau",
@@ -18,7 +18,17 @@ const I18N = {
     need_vehicle: "Choisissez au moins un engin",
     new_alert: "Nouvelle alerte à proximité !",
     notif_enabled: "Notifications activées", notif_denied: "Notifications refusées",
-    geo_unavailable: "Géolocalisation indisponible"
+    notif_disabled: "Notifications désactivées",
+    push_enabled: "Alertes push activées (même app fermée)",
+    push_error: "Impossible d'activer les alertes push",
+    geo_unavailable: "Géolocalisation indisponible",
+    export_btn: "Exporter", export_title: "Exporter les données",
+    export_hint: "Téléchargez toutes les données de signalements dans le format de votre choix.",
+    export_csv_sub: "Tableur (Excel)",
+    export_json_sub: "Données brutes",
+    export_pdf_sub: "Rapport formaté",
+    install_btn: "Installer",
+    install_ok: "Application installée !"
   },
   en: {
     app_title: "Accident Alert", report_btn: "Report", stats_btn: "Statistics",
@@ -38,7 +48,17 @@ const I18N = {
     need_vehicle: "Pick at least one vehicle",
     new_alert: "New alert nearby!",
     notif_enabled: "Notifications enabled", notif_denied: "Notifications denied",
-    geo_unavailable: "Geolocation unavailable"
+    notif_disabled: "Notifications disabled",
+    push_enabled: "Push alerts enabled (even when app closed)",
+    push_error: "Failed to enable push alerts",
+    geo_unavailable: "Geolocation unavailable",
+    export_btn: "Export", export_title: "Export data",
+    export_hint: "Download all reports in your preferred format.",
+    export_csv_sub: "Spreadsheet (Excel)",
+    export_json_sub: "Raw data",
+    export_pdf_sub: "Formatted report",
+    install_btn: "Install",
+    install_ok: "App installed!"
   }
 };
 let LANG = localStorage.getItem('lang') || 'fr';
@@ -240,11 +260,76 @@ async function loadAccidents() {
   } catch (e) { console.error(e); }
 }
 
-// ---------- Notifications ----------
+// ---------- Notifications + Push ----------
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const b64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; ++i) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+async function enablePush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) return true;
+    const { key } = await (await fetch('/api/push/vapid-public')).json();
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key)
+    });
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sub)
+    });
+    return true;
+  } catch (e) {
+    console.error('push subscribe failed', e);
+    return false;
+  }
+}
+
+async function disablePush() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await fetch('/api/push/unsubscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: sub.endpoint })
+      });
+      await sub.unsubscribe();
+    }
+  } catch {}
+}
+
 document.getElementById('btn-notif').addEventListener('click', async () => {
-  if (!('Notification' in window)) return toast('Notifications ' + t('geo_unavailable'), 'err');
+  if (!('Notification' in window)) return toast(t('geo_unavailable'), 'err');
+  if (Notification.permission === 'granted') {
+    // Toggle off
+    await disablePush();
+    toast(t('notif_disabled'));
+    localStorage.removeItem('push_on');
+    return;
+  }
   const p = await Notification.requestPermission();
-  toast(p === 'granted' ? t('notif_enabled') : t('notif_denied'), p === 'granted' ? 'ok' : 'err');
+  if (p === 'granted') {
+    const ok = await enablePush();
+    if (ok) {
+      toast(t('push_enabled'), 'ok');
+      localStorage.setItem('push_on', '1');
+    } else {
+      toast(t('notif_enabled'), 'ok'); // Fallback: in-app only
+    }
+  } else {
+    toast(t('notif_denied'), 'err');
+  }
 });
 
 function notifyNew(a) {
@@ -276,6 +361,43 @@ async function renderStats() {
 }
 function renderStatsIfOpen() { if (STATS_OPEN && !document.getElementById('modal-stats').classList.contains('hidden')) renderStats(); }
 document.querySelector('#modal-stats [data-close]').addEventListener('click', () => STATS_OPEN = false);
+
+// ---------- Export button ----------
+document.getElementById('btn-export').addEventListener('click', () => openModal('modal-export'));
+
+// ---------- PWA install ----------
+let deferredPrompt = null;
+const btnInstall = document.getElementById('btn-install');
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  btnInstall.classList.remove('hidden');
+});
+btnInstall.addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  btnInstall.classList.add('hidden');
+  if (outcome === 'accepted') toast(t('install_ok'), 'ok');
+});
+window.addEventListener('appinstalled', () => {
+  btnInstall.classList.add('hidden');
+  toast(t('install_ok'), 'ok');
+});
+
+// ---------- Service Worker ----------
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      await navigator.serviceWorker.register('/sw.js');
+      // Auto re-enable push if the user had it on
+      if (localStorage.getItem('push_on') === '1' && Notification.permission === 'granted') {
+        enablePush();
+      }
+    } catch (e) { console.warn('SW register failed', e); }
+  });
+}
 
 // ---------- Boot ----------
 loadAccidents();

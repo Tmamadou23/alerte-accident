@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: alerte-accident
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/accidents
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: VAPID_PUBLIC
+        value: BABTWydace1Nn8ENz-F9oqylWKJhw9jRsGHhvle4q6O5N276ZZyXdEJT26iblS9C-AKuYaW35VUI7aD1iMcDcLs
+      - key: VAPID_PRIVATE
+        sync: false
+      - key: VAPID_EMAIL
+        value: mailto:admin@alerte-accident.app
+      - key: NODE_VERSION
+        value: 22

@@ -59,6 +59,15 @@ form { padding: 16px 20px 20px; }
 .toast.ok { background: var(--ok); }
 .toast.err { background: var(--brand); }
 
+.hidden { display: none !important; }
+.export-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.export-card { display: flex; flex-direction: column; align-items: center; padding: 20px 10px; background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; text-decoration: none; color: var(--ink); transition: transform .15s, background .15s; }
+.export-card:hover { transform: translateY(-2px); background: #fff7ed; border-color: var(--accent); }
+.export-card .ico { font-size: 32px; }
+.export-card .lbl { font-weight: 700; margin-top: 6px; }
+.export-card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+@media (max-width: 480px) { .export-grid { grid-template-columns: 1fr; } }
+
 .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 20px; }
 .stat-card { background: #f8fafc; border-radius: 10px; padding: 16px; text-align: center; border-left: 4px solid var(--brand); }
 .stat-card .n { font-size: 30px; font-weight: 700; color: var(--brand-dark); }
