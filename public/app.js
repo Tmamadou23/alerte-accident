@@ -7,6 +7,12 @@ const I18N = {
     v_ped: "Piéton", v_bus: "Bus", v_other: "Autre",
     report_title: "Signaler un accident", reporter_name: "Nom et prénom",
     reporter_contact: "Contact (tél / email)", place_name: "Nom du lieu",
+    occurred_at: "Date et heure de l'accident",
+    occurred_hint: "Modifiez si l'accident a eu lieu plus tôt",
+    accident_time: "Accident survenu le",
+    reported_time: "Signalé le",
+    err_future: "La date ne peut pas être dans le futur",
+    err_too_old: "L'accident est trop ancien (max 30 jours)",
     lat: "Latitude", lng: "Longitude", use_geo: "📍 Utiliser ma position",
     geo_hint: "ou cliquez sur la carte pour choisir",
     vehicles: "Engins impliqués", severity: "Niveau",
@@ -37,6 +43,12 @@ const I18N = {
     v_ped: "Pedestrian", v_bus: "Bus", v_other: "Other",
     report_title: "Report an accident", reporter_name: "Full name",
     reporter_contact: "Contact (phone / email)", place_name: "Location name",
+    occurred_at: "Accident date & time",
+    occurred_hint: "Edit if the accident happened earlier",
+    accident_time: "Accident on",
+    reported_time: "Reported on",
+    err_future: "Date cannot be in the future",
+    err_too_old: "Accident too old (max 30 days)",
     lat: "Latitude", lng: "Longitude", use_geo: "📍 Use my location",
     geo_hint: "or click on the map to pick",
     vehicles: "Vehicles involved", severity: "Level",
@@ -108,6 +120,11 @@ document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click
 document.getElementById('btn-report').addEventListener('click', () => {
   openModal('modal-report');
   pickMode = true;
+  // Pre-fill occurred_at with current local datetime
+  const now = new Date();
+  const tzOffset = now.getTimezoneOffset() * 60000;
+  const local = new Date(now - tzOffset).toISOString().slice(0, 16);
+  document.getElementById('in-occurred').value = local;
 });
 document.getElementById('btn-stats').addEventListener('click', async () => {
   openModal('modal-stats');
@@ -173,10 +190,16 @@ document.getElementById('form-report').addEventListener('submit', async e => {
     deaths: parseInt(f.deaths.value) || 0,
     injured: parseInt(f.injured.value) || 0,
     description: f.description.value.trim(),
+    occurred_at: f.occurred_at.value ? new Date(f.occurred_at.value).toISOString() : null,
     photo: photoDataUrl
   };
   if (isNaN(data.lat) || isNaN(data.lng)) return toast(t('need_coords'), 'err');
   if (!data.vehicles.length) return toast(t('need_vehicle'), 'err');
+  if (data.occurred_at) {
+    const d = new Date(data.occurred_at).getTime();
+    if (d > Date.now() + 5 * 60 * 1000) return toast(t('err_future'), 'err');
+    if (d < Date.now() - 30 * 24 * 60 * 60 * 1000) return toast(t('err_too_old'), 'err');
+  }
 
   try {
     const r = await fetch('/api/accidents', {
@@ -210,12 +233,15 @@ function iconFor(sev) {
 
 function popupHtml(a) {
   const photo = a.has_photo ? `<img src="/photo/${a.id}" alt="photo"/>` : '';
-  const date = new Date(a.created_at).toLocaleString(LANG === 'fr' ? 'fr-FR' : 'en-US');
+  const locale = LANG === 'fr' ? 'fr-FR' : 'en-US';
+  const reported = new Date(a.created_at).toLocaleString(locale);
+  const occurred = a.occurred_at ? new Date(a.occurred_at).toLocaleString(locale) : null;
   const sevLabel = t(a.severity);
   return `<div class="popup">
     <h4>${escapeHtml(a.place_name || '—')}</h4>
     <div><span class="badge ${a.severity}">${sevLabel}</span></div>
-    <div class="meta">${date}</div>
+    ${occurred ? `<div class="meta"><b>${t('accident_time')}:</b> ${occurred}</div>` : ''}
+    <div class="meta"><b>${t('reported_time')}:</b> ${reported}</div>
     <div style="margin-top:6px"><b>${t('vehicles')}:</b> ${escapeHtml(a.vehicles || '—')}</div>
     <div><b>${t('deaths')}:</b> ${a.deaths} · <b>${t('injured')}:</b> ${a.injured}</div>
     ${a.description ? `<div style="margin-top:6px">${escapeHtml(a.description)}</div>` : ''}

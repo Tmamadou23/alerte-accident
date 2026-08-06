@@ -50,9 +50,12 @@ async function migrate() {
       description TEXT,
       photo_mime VARCHAR(60),
       photo_data BYTEA,
+      occurred_at TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  // For existing tables: add column if missing (idempotent)
+  await pool.query(`ALTER TABLE accidents ADD COLUMN IF NOT EXISTS occurred_at TIMESTAMP`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS push_subs (
       id SERIAL PRIMARY KEY,
@@ -70,8 +73,8 @@ app.get('/api/accidents', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, lat, lng, place_name, reporter_name, reporter_contact,
               vehicles, severity, deaths, injured, description,
-              (photo_data IS NOT NULL) AS has_photo, created_at
-         FROM accidents ORDER BY created_at DESC LIMIT 500`
+              (photo_data IS NOT NULL) AS has_photo, occurred_at, created_at
+         FROM accidents ORDER BY COALESCE(occurred_at, created_at) DESC LIMIT 500`
     );
     res.json(rows);
   } catch (e) { console.error(e); res.status(500).json({ error: 'db_error' }); }
@@ -94,10 +97,21 @@ app.post('/api/accidents', async (req, res) => {
       }
     }
     const vehicles = Array.isArray(b.vehicles) ? b.vehicles.join(',') : String(b.vehicles || '');
+    // Parse occurred_at (ISO string or "YYYY-MM-DDTHH:mm"). Reject if in the future or older than 30 days.
+    let occurredAt = null;
+    if (b.occurred_at) {
+      const d = new Date(b.occurred_at);
+      if (!isNaN(d.getTime())) {
+        const now = Date.now();
+        if (d.getTime() > now + 5 * 60 * 1000) return res.status(400).json({ error: 'occurred_in_future' });
+        if (d.getTime() < now - 30 * 24 * 60 * 60 * 1000) return res.status(400).json({ error: 'occurred_too_old' });
+        occurredAt = d;
+      }
+    }
     const { rows } = await pool.query(
       `INSERT INTO accidents (lat, lng, place_name, reporter_name, reporter_contact,
-        vehicles, severity, deaths, injured, description, photo_mime, photo_data)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id, created_at`,
+        vehicles, severity, deaths, injured, description, photo_mime, photo_data, occurred_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, occurred_at, created_at`,
       [lat, lng, String(b.place_name || '').slice(0, 250),
         String(b.reporter_name || '').slice(0, 120),
         String(b.reporter_contact || '').slice(0, 120),
@@ -106,7 +120,7 @@ app.post('/api/accidents', async (req, res) => {
         parseInt(b.deaths) || 0,
         parseInt(b.injured) || 0,
         String(b.description || '').slice(0, 2000),
-        mime, buf]
+        mime, buf, occurredAt]
     );
     const created = rows[0];
     // Fire push notifications (do not await; do not fail request)
@@ -157,11 +171,11 @@ function csvEscape(v) {
 app.get('/api/export/csv', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, created_at, place_name, lat, lng, severity, vehicles,
+      `SELECT id, occurred_at, created_at, place_name, lat, lng, severity, vehicles,
               deaths, injured, reporter_name, reporter_contact, description
-         FROM accidents ORDER BY created_at DESC`
+         FROM accidents ORDER BY COALESCE(occurred_at, created_at) DESC`
     );
-    const headers = ['id','created_at','place_name','lat','lng','severity','vehicles','deaths','injured','reporter_name','reporter_contact','description'];
+    const headers = ['id','occurred_at','created_at','place_name','lat','lng','severity','vehicles','deaths','injured','reporter_name','reporter_contact','description'];
     let out = '\uFEFF' + headers.join(',') + '\n';
     for (const r of rows) out += headers.map(h => csvEscape(r[h])).join(',') + '\n';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -173,9 +187,9 @@ app.get('/api/export/csv', async (req, res) => {
 app.get('/api/export/json', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, created_at, place_name, lat, lng, severity, vehicles,
+      `SELECT id, occurred_at, created_at, place_name, lat, lng, severity, vehicles,
               deaths, injured, reporter_name, reporter_contact, description
-         FROM accidents ORDER BY created_at DESC`
+         FROM accidents ORDER BY COALESCE(occurred_at, created_at) DESC`
     );
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="accidents-${Date.now()}.json"`);
@@ -186,9 +200,9 @@ app.get('/api/export/json', async (req, res) => {
 app.get('/api/export/pdf', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, created_at, place_name, lat, lng, severity, vehicles,
+      `SELECT id, occurred_at, created_at, place_name, lat, lng, severity, vehicles,
               deaths, injured, reporter_name, reporter_contact, description
-         FROM accidents ORDER BY created_at DESC`
+         FROM accidents ORDER BY COALESCE(occurred_at, created_at) DESC`
     );
     const { rows: statsRows } = await pool.query(`
       SELECT COUNT(*)::int AS total,
@@ -232,7 +246,8 @@ app.get('/api/export/pdf', async (req, res) => {
         if (doc.y > 760) doc.addPage();
         doc.fillColor('#991b1b').fontSize(11).text(`#${r.id} — ${r.place_name || 'Lieu inconnu'}`);
         doc.fillColor('#0f172a').fontSize(9);
-        doc.text(`Date       : ${new Date(r.created_at).toLocaleString('fr-FR')}`);
+        doc.text(`Accident   : ${r.occurred_at ? new Date(r.occurred_at).toLocaleString('fr-FR') : '—'}`);
+        doc.text(`Signalé le : ${new Date(r.created_at).toLocaleString('fr-FR')}`);
         doc.text(`Gravité    : ${r.severity === 'grave' ? 'Grave' : 'Moins grave'}`);
         doc.text(`Position   : ${r.lat}, ${r.lng}`);
         doc.text(`Engins     : ${r.vehicles || '—'}`);
